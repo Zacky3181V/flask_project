@@ -1,12 +1,41 @@
-from flask import Flask, request
+
+from flask import Flask
+from flask import jsonify
+from flask import request
 from flask_restful import Resource, Api
-from secure_check import authenticate, identity
-from flask_jwt import JWT, jwt_required, current_identity
+from flask_jwt_extended import create_access_token
+from flask_jwt_extended import get_jwt_identity
+from flask_jwt_extended import jwt_required
+from flask_jwt_extended import JWTManager
 
 app = Flask(__name__)
-app.config['SECRET_KEY'] = 'mysecretkey'
+
+
+app.config["JWT_SECRET_KEY"] = "super-secret"  
+jwt = JWTManager(app)
+
+
 api = Api(app)
-jwt = JWT(app, authenticate, identity)
+
+
+@app.route("/login", methods=["POST"])
+def login():
+    username = request.json.get("username", None)
+    password = request.json.get("password", None)
+    if username != "test" or password != "test":
+        return jsonify({"msg": "Bad username or password"}), 401
+
+    access_token = create_access_token(identity=username)
+    return jsonify(access_token=access_token)
+
+
+
+@app.route("/protected", methods=["GET"])
+@jwt_required()
+def protected():
+    current_user = get_jwt_identity()
+    return jsonify(logged_in_as=current_user), 200
+
 students = []
 class StudentNames(Resource):
     def get(self, name):
@@ -32,22 +61,16 @@ class StudentNames(Resource):
 
 
 class AllNames(Resource):
+    
     @jwt_required()
     def get(self):
+        current_user = get_jwt_identity()
         return {'students': students}
 
 api.add_resource(StudentNames, '/student/<string:name>')
 api.add_resource(AllNames, '/students')
 
-@app.route('/')
-def hello_world():  # put application's code here
-    return 'Hello World!'
-
-@app.route('/protected')
-@jwt_required()
-def protected():
-    return '%s' % current_identity
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     app.run(debug=True)
